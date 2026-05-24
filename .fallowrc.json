@@ -22,6 +22,23 @@
     "zod"
   ],
   "rules": {
+    "boundary-violation": "error",
     "unused-dependencies": "warn"
+  },
+  "boundaries": {
+    "zones": [
+      { "name": "domain", "patterns": ["src/domain/**"] },
+      { "name": "infra", "patterns": ["src/infra/**"] },
+      { "name": "api", "patterns": ["src/api/**"] },
+      { "name": "webapp", "patterns": ["src/webapp/**"] },
+      { "name": "server", "patterns": ["src/server.ts"] }
+    ],
+    "rules": [
+      { "from": "domain", "allow": [] },
+      { "from": "infra", "allow": ["domain"] },
+      { "from": "api", "allow": ["domain", "infra"] },
+      { "from": "webapp", "allow": ["domain", "api"] },
+      { "from": "server", "allow": ["domain", "infra", "api", "webapp"] }
+    ]
   }
 }
