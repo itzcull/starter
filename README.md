@@ -148,7 +148,7 @@ Rule of thumb: if a module contains only declarations, use `*.schema.ts` or `*.t
 
 Every stage has a specific job. Understanding the _why_ matters as much as the commands.
 
-- **Pre-commit (lefthook)** — runs `oxlint --fix` and `oxfmt --write` on staged files (auto-restaged), then `vitest related --run --project unit` over the staged files. _Why_: keeps git history clean and readable (no "fix lint" commits), and ensures every commit is **independently releasable** — no commit silently breaks the behaviour of code near the change.
+- **Pre-commit (lefthook)** — runs `oxlint --fix` and `oxfmt --write` on staged files (auto-restaged), then `vitest related --run --project unit` over the staged files and `pnpm fallow:ci` for Fallow checks. _Why_: keeps git history clean and readable (no "fix lint" commits), and ensures every commit is **independently releasable** — no commit silently breaks the behaviour or architecture of code near the change.
 - **Pre-push (lefthook)** — `vitest run --changed origin/master --project unit`. Catches regressions across the whole change set before they leave the machine.
 - **`pnpm run ci`** (local + CI) — `oxlint && oxfmt --check . && pnpm typecheck:layers && pnpm fallow:ci`. Read-only quality gate; no fixes, no writes. The source of truth for "is this branch green?"
 - **GitHub Actions** — runs the same gate plus the test matrix (unit, browser, integration).
@@ -194,7 +194,7 @@ A short checklist for applying these conventions to a greenfield project:
 2. Create `src/domain`, `src/infra`, `src/utils` on day one, even if empty. Directory shape is a commitment.
 3. Copy the `tsconfig.json` + `tsconfig.domain.json` + `tsconfig.infra.json` trio; adjust the includes/aliases.
 4. Set up `oxlint.config.ts` and `oxfmt.config.ts`. Copy `tools/oxlint-plugins/` and rename the `starter` namespace.
-5. Add `lefthook.yml` with pre-commit (lint + format + `vitest related --project unit`) and pre-push (`vitest run --changed origin/master --project unit`).
+5. Add `lefthook.yml` with pre-commit (lint + format + `vitest related --project unit` + `pnpm fallow:ci`) and pre-push (`vitest run --changed origin/master --project unit`).
 6. Add the `pnpm ci` script: lint → format check → layered typecheck → fallow audit.
 7. Add Stryker (`@stryker-mutator/core`, `@stryker-mutator/vitest-runner`), `stryker.config.mjs`, `vitest.mutation.config.ts`, and the `pnpm test:mutate` script with an 80% `thresholds.break` floor.
 8. Adopt the four test-type filename suffixes (`.unit`, `.browser`, `.integration`, `.e2e`) before writing any tests.

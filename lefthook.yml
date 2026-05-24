@@ -10,6 +10,8 @@ pre-commit:
     - name: vitest
       glob: '*.{js,ts,tsx,jsx,mjs,cjs}'
       run: pnpm vitest related --run --project unit --passWithNoTests {staged_files}
+    - name: fallow
+      run: pnpm fallow:ci
 
 pre-push:
   jobs:

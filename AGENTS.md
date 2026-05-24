@@ -61,7 +61,7 @@ This project uses **Vite 8**, **Vitest 4**, **Stryker**, **oxlint**, **oxfmt**, 
 
 Git hooks are managed by [lefthook](https://lefthook.dev), configured in `lefthook.yml`.
 
-- **pre-commit** runs `oxlint --fix` and `oxfmt --write` on staged files (auto-restaged), then runs `vitest related` over the staged files — only unit tests that import a staged file execute.
+- **pre-commit** runs `oxlint --fix` and `oxfmt --write` on staged files (auto-restaged), then runs `vitest related` over the staged files — only unit tests that import a staged file execute. It also runs `pnpm fallow:ci` to enforce Fallow checks before each commit.
 - **pre-push** runs `vitest run --changed origin/master --project unit`, executing only the unit tests affected by files changed against `origin/master`.
 
 Mutation testing is intentionally not a git hook because it is slower than the commit/push feedback loop. Run `pnpm test:mutate` before merging changes to `src/domain/**`, `src/api/**`, or unit-test behaviour; CI enforces the same command for those paths.
