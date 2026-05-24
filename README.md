@@ -53,13 +53,14 @@ Business logic lives in pure TypeScript. Frameworks, databases, and external ser
 - `src/api/` — HTTP composition root (Hono). Wires concrete adapters into use cases and exposes them as routes.
 - `src/webapp/` — React + TanStack Start UI. Calls into the API; composes its own adapters where needed.
 
-**The boundary is enforced three times, on purpose:**
+**The boundary is enforced four times, on purpose:**
 
 1. **Path aliases** — `@domain/*` and `@infra/*` in `tsconfig.json` make the layer of every import readable at a glance.
 2. **Layered typechecks** — `tsconfig.domain.json` compiles the domain alone; `tsconfig.infra.json` compiles domain + infra. If domain code reaches into infra, the domain typecheck fails before anything else runs. `pnpm typecheck:layers` runs both.
 3. **Custom oxlint rule** — `starter/domain-no-infra-imports` (in `tools/oxlint-plugins/rules/`) blocks both static and dynamic imports from `src/infra/**` inside `src/domain/**` files.
+4. **Fallow custom boundaries** — `.fallowrc.json` defines explicit zones for `domain`, `infra`, `api`, `webapp`, and `server`, then fails `boundary-violation` issues in CI.
 
-Any one of the three would catch most mistakes; all three together make the violation loud and local.
+Any one of the four would catch most mistakes; all four together make the violation loud and local.
 
 ## Directory layout
 
@@ -178,10 +179,12 @@ pnpm fallow               # full analysis (dead code + dupes + health)
 pnpm fallow dead-code     # unused code + circular deps only
 pnpm fallow dupes         # duplication scan
 pnpm fallow health        # complexity + maintainability
+pnpm fallow list --boundaries
+pnpm fallow dead-code --boundary-violations
 pnpm fallow fix --dry-run # preview auto-fixes for unused exports/deps
 ```
 
-`pnpm run ci` runs `pnpm fallow:ci` (`fallow audit`) as a quality gate — it scopes analysis to files changed against the base branch and returns a pass/warn/fail verdict. Configuration lives in `.fallowrc.json`. For the full feature set, see the [fallow docs](https://docs.fallow.tools).
+`pnpm run ci` runs `pnpm fallow:ci` (`fallow audit`) as a quality gate — it scopes analysis to files changed against the base branch and returns a pass/warn/fail verdict. Configuration lives in `.fallowrc.json`, including custom boundary zones and rules for the hexagonal architecture. For the full feature set, see the [fallow docs](https://docs.fallow.tools).
 
 ## Reproducing this setup in your own repo
 

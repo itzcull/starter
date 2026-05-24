@@ -30,7 +30,7 @@ This project uses **Vite 8**, **Vitest 4**, **Stryker**, **oxlint**, **oxfmt**, 
 
 - `pnpm lint` - Lint and auto-fix with oxlint (includes local `starter/*` JS plugin rules in `tools/oxlint-plugins/`)
 - `pnpm format` - Format code with oxfmt
-- `pnpm run ci` - Full CI check: lint, format, and typecheck
+- `pnpm run ci` - Full CI check: lint, format, typecheck, and Fallow audit
 
 ### Dependencies
 
@@ -46,6 +46,7 @@ This project uses **Vite 8**, **Vitest 4**, **Stryker**, **oxlint**, **oxfmt**, 
 - **Stryker config**: `stryker.config.mjs` (mutation scope, reporters, 80% break threshold)
 - **oxlint config**: `oxlint.config.ts` (type-aware linting, ignore patterns)
 - **oxfmt config**: `oxfmt.config.ts` (formatting: no semi, single quotes)
+- **Fallow config**: `.fallowrc.json` (dead code analysis, dependency checks, custom architecture boundary zones)
 - **TypeScript**: `tsconfig.json` and layer-specific configs
 
 ## Imports
@@ -71,4 +72,5 @@ Hooks install automatically via the `prepare` script (`lefthook install`). To sk
 
 - [ ] Run `pnpm install` after pulling remote changes and before getting started.
 - [ ] Run `pnpm run ci` and `pnpm test` to validate changes.
+- [ ] Run `pnpm fallow list --boundaries` and `pnpm fallow dead-code --boundary-violations` after changing architecture boundary config.
 - [ ] Run `pnpm test:mutate` when changing mutation-scoped logic or unit tests.
