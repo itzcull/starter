@@ -18,10 +18,16 @@ This README is both **descriptive** (what the repo enforces today) and **prescri
 
 ## Getting started
 
+This repo is developed exclusively inside a dev container. The container owns the inner loop — Postgres, the Vite dev server, Vitest, Playwright browsers, and the testcontainers daemon all run inside it, so two workspaces side-by-side never collide on host ports or share state. Local `pnpm install` / `pnpm dev` on the host is unsupported.
+
+Open the workspace and **Reopen in Container** (VS Code / Cursor with the Dev Containers extension), or:
+
 ```sh
-pnpm install
-pnpm dev
+devcontainer up --workspace-folder .
+devcontainer exec --workspace-folder . pnpm dev
 ```
+
+The first build runs `.devcontainer/post-create.sh`, which installs pnpm deps and Playwright browsers into per-workspace named volumes, then runs `docker compose up -d --wait` against the root `docker-compose.yml` on the container's nested docker daemon. Postgres (and any future app services) are reachable inside the container at `localhost:5432` and are not published to the real host.
 
 Run the test suites:
 

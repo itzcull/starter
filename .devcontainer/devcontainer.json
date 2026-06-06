@@ -1,0 +1,21 @@
+{
+  "name": "starter",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspace",
+
+  "forwardPorts": [5173, 4983],
+  "portsAttributes": {
+    "5173": { "label": "Vite dev", "onAutoForward": "notify" },
+    "4983": { "label": "Drizzle Studio", "onAutoForward": "silent" }
+  },
+
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+
+  "postCreateCommand": ".devcontainer/post-create.sh",
+  "postStartCommand": "docker compose -f /workspace/docker-compose.yml up -d --wait",
+
+  "remoteUser": "node"
+}

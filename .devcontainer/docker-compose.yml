@@ -1,0 +1,17 @@
+services:
+  workspace:
+    image: mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm
+    command: sleep infinity
+    privileged: true
+    environment:
+      TESTCONTAINERS_RYUK_DISABLED: 'true'
+    volumes:
+      - ..:/workspace:cached
+      - node-modules:/workspace/node_modules
+      - pnpm-store:/home/node/.local/share/pnpm/store
+      - dind-storage:/var/lib/docker
+
+volumes:
+  node-modules:
+  pnpm-store:
+  dind-storage:
