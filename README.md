@@ -33,7 +33,7 @@ pnpm test:e2e      # Playwright e2e
 pnpm test:mutate   # Stryker mutation tests
 ```
 
-Full quality gate (lint, format, typecheck layers, fallow audit):
+Full quality gate (lint, format, typecheck layers, codebase audit):
 
 ```sh
 pnpm run ci
@@ -148,9 +148,9 @@ Rule of thumb: if a module contains only declarations, use `*.schema.ts` or `*.t
 
 Every stage has a specific job. Understanding the _why_ matters as much as the commands.
 
-- **Pre-commit (lefthook)** — runs `oxlint --fix` and `oxfmt --write` on staged files (auto-restaged), then `vitest related --run --project unit` over the staged files and `pnpm fallow:ci` for Fallow checks. _Why_: keeps git history clean and readable (no "fix lint" commits), and ensures every commit is **independently releasable** — no commit silently breaks the behaviour or architecture of code near the change.
+- **Pre-commit (lefthook)** — runs `oxlint --fix` and `oxfmt --write` on staged files (auto-restaged), then `vitest related --run --project unit` over the staged files and `pnpm codebase:audit` for codebase intelligence checks. _Why_: keeps git history clean and readable (no "fix lint" commits), and ensures every commit is **independently releasable** — no commit silently breaks the behaviour or architecture of code near the change.
 - **Pre-push (lefthook)** — `vitest run --changed origin/master --project unit`. Catches regressions across the whole change set before they leave the machine.
-- **`pnpm run ci`** (local + CI) — `oxlint && oxfmt --check . && pnpm typecheck:layers && pnpm fallow:ci`. Read-only quality gate; no fixes, no writes. The source of truth for "is this branch green?"
+- **`pnpm run ci`** (local + CI) — `oxlint && oxfmt --check . && pnpm typecheck:layers && pnpm codebase:audit`. Read-only quality gate; no fixes, no writes. The source of truth for "is this branch green?"
 - **GitHub Actions** — runs the same gate plus the test matrix (unit, browser, integration).
 - **Mutation Tests workflow** — `pnpm test:mutate` on pull requests that touch `src/domain/**`, `src/api/**`, unit tests, or mutation config, with manual dispatch available. It fails below an 80% mutation score.
 
@@ -172,19 +172,20 @@ To skip hooks for a single command (e.g. an intentional WIP commit), set `LEFTHO
 - **Circular dependencies**
 - **Architecture drift**
 
-Common commands:
+Use the `codebase:*` scripts for stable, tool-agnostic commands. Fallow is the current implementation behind them:
 
 ```sh
-pnpm fallow               # full analysis (dead code + dupes + health)
-pnpm fallow dead-code     # unused code + circular deps only
-pnpm fallow dupes         # duplication scan
-pnpm fallow health        # complexity + maintainability
-pnpm fallow list --boundaries
-pnpm fallow dead-code --boundary-violations
-pnpm fallow fix --dry-run # preview auto-fixes for unused exports/deps
+pnpm codebase:analyze             # full analysis (dead code + dupes + health)
+pnpm codebase:audit               # changed-file quality gate for hooks and CI
+pnpm codebase:dead-code           # unused code + circular deps only
+pnpm codebase:duplicates          # duplication scan
+pnpm codebase:health              # complexity + maintainability
+pnpm codebase:boundaries          # resolved architecture boundary config
+pnpm codebase:boundary-violations # architecture boundary violations only
+pnpm codebase:fix:dry-run         # preview auto-fixes for unused exports/deps
 ```
 
-`pnpm run ci` runs `pnpm fallow:ci` (`fallow audit`) as a quality gate — it scopes analysis to files changed against the base branch and returns a pass/warn/fail verdict. Configuration lives in `.fallowrc.json`, including custom boundary zones and rules for the hexagonal architecture. For the full feature set, see the [fallow docs](https://docs.fallow.tools).
+`pnpm run ci` runs `pnpm codebase:audit` (`fallow audit`) as a quality gate — it scopes analysis to files changed against the base branch and returns a pass/warn/fail verdict. Configuration lives in `.fallowrc.json`, including custom boundary zones and rules for the hexagonal architecture. For the full feature set, see the [fallow docs](https://docs.fallow.tools).
 
 ## Reproducing this setup in your own repo
 
