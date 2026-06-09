@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "paths": {
+      "@domain/*": ["./src/domain/*"],
+      "@theme": ["./src/webapp/theme"]
+    }
+  },
+  "include": ["src/domain/**/*", "src/webapp/**/*"],
+  "exclude": ["node_modules", "dist", "build", "**/*.test.ts", "**/*.test.tsx"]
+}

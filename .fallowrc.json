@@ -6,6 +6,8 @@
     "src/**/*.{test,spec}.{ts,tsx}",
     "test/**/*.{ts,tsx}",
     "e2e/**/*.{ts,tsx}",
+    "oxfmt.config.ts",
+    "oxlint.config.ts",
     "stryker.config.mjs",
     "vitest.mutation.config.ts"
   ],
