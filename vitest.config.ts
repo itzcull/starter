@@ -1,8 +1,10 @@
 import react from '@vitejs/plugin-react'
 import { playwright } from '@vitest/browser-playwright'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 const defaultExclude = ['**/node_modules/**', '**/dist/**', '**/.{git,cache,output,temp}/**']
+const resolvePath = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 
 export default defineConfig({
   resolve: {
@@ -15,6 +17,9 @@ export default defineConfig({
         plugins: [react()],
         resolve: {
           tsconfigPaths: true,
+          alias: {
+            '@test-utils': resolvePath('./test/browser'),
+          },
         },
         test: {
           name: 'browser',
@@ -33,6 +38,9 @@ export default defineConfig({
       {
         resolve: {
           tsconfigPaths: true,
+          alias: {
+            '@test-utils': resolvePath('./test/unit'),
+          },
         },
         test: {
           name: 'unit',
@@ -45,6 +53,9 @@ export default defineConfig({
       {
         resolve: {
           tsconfigPaths: true,
+          alias: {
+            '@test-utils': resolvePath('./test/integration'),
+          },
         },
         test: {
           name: 'integration',
@@ -52,8 +63,8 @@ export default defineConfig({
           exclude: defaultExclude,
           globals: true,
           environment: 'node',
-          setupFiles: ['./test/setup/integration-setup.ts'],
-          globalSetup: ['./test/setup/global-setup.ts'],
+          setupFiles: ['./test/integration/setup.ts'],
+          globalSetup: ['./test/integration/global-setup.ts'],
           testTimeout: 30000,
           hookTimeout: 60000,
           pool: 'forks',

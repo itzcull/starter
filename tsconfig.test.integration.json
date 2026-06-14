@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "@domain/*": ["./src/domain/*"],
+      "@infra/*": ["./src/infra/*"],
+      "@test-utils/*": ["./test/integration/*"]
+    }
+  },
+  "include": [
+    "src/**/*.integration.test.ts",
+    "src/**/*.integration.test.tsx",
+    "test/**/*.integration.test.ts",
+    "test/**/*.integration.test.tsx",
+    "test/integration/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "build"]
+}

@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "DOM"],
+    "types": ["vite/client", "vitest/globals", "@vitest/browser"],
+    "paths": {
+      "@domain/*": ["./src/domain/*"],
+      "@theme": ["./src/webapp/theme"],
+      "@test-utils/*": ["./test/browser/*"]
+    }
+  },
+  "include": [
+    "src/**/*.browser.test.ts",
+    "src/**/*.browser.test.tsx",
+    "test/**/*.browser.test.ts",
+    "test/**/*.browser.test.tsx",
+    "test/browser/**/*.ts",
+    "test/browser/**/*.tsx",
+    "vitest.setup.ts"
+  ],
+  "exclude": ["node_modules", "dist", "build"]
+}

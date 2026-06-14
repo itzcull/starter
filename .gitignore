@@ -33,6 +33,8 @@ lib-cov
 
 coverage
 \*.lcov
+playwright-report/
+test-results/
 
 # nyc test coverage
 

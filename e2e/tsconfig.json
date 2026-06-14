@@ -1,0 +1,3 @@
+{
+  "extends": "../tsconfig.test.e2e.json"
+}

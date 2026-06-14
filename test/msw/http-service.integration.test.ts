@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { server } from './server'
+import { server } from '@test-utils/msw-server'
 
 describe('MSW integration test support', () => {
   it('intercepts third-party HTTP calls made with fetch', async () => {
