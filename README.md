@@ -12,7 +12,7 @@ This README is both **descriptive** (what the repo enforces today) and **prescri
 - **Tests**: Vitest 4 (unit + browser + integration), Playwright (e2e), Stryker (mutation)
 - **DB**: Drizzle ORM + Postgres
 - **Lint / format**: oxlint, oxfmt
-- **Typecheck**: layered (`tsconfig.domain.json`, `tsconfig.infra.json`)
+- **Typecheck**: full source plus layered (`tsconfig.domain.json`, `tsconfig.infra.json`, `tsconfig.api.json`, `tsconfig.webapp.json`)
 - **Codebase intelligence**: [fallow](#codebase-intelligence-fallow)
 - **Git hooks**: lefthook
 
@@ -36,10 +36,11 @@ pnpm test          # watch mode, all projects
 pnpm test:unit     # unit
 pnpm test:browser  # browser (Vitest + Playwright)
 pnpm test:e2e      # Playwright e2e
+pnpm test:coverage # Vitest coverage
 pnpm test:mutate   # Stryker mutation tests
 ```
 
-Full quality gate (lint, format, typecheck layers, codebase audit):
+Full static quality gate (lint, format, layer typechecks, full source typecheck, test typecheck, codebase audit):
 
 ```sh
 pnpm run ci
@@ -62,7 +63,7 @@ Business logic lives in pure TypeScript. Frameworks, databases, and external ser
 **The boundary is enforced four times, on purpose:**
 
 1. **Path aliases** — `@domain/*` and `@infra/*` in `tsconfig.json` make the layer of every import readable at a glance.
-2. **Layered typechecks** — `tsconfig.domain.json` compiles the domain alone; `tsconfig.infra.json` compiles domain + infra. If domain code reaches into infra, the domain typecheck fails before anything else runs. `pnpm typecheck:layers` runs both.
+2. **Layered typechecks** — `tsconfig.domain.json` compiles the domain alone; `tsconfig.infra.json` compiles domain + infra; `tsconfig.api.json` compiles the HTTP composition layer with its allowed dependencies; `tsconfig.webapp.json` compiles the UI layer with its allowed dependencies. If a lower layer reaches upward, the relevant layer typecheck fails before anything else runs. `pnpm typecheck:layers` runs all four, while `pnpm typecheck` checks the full source project and `pnpm typecheck:test` checks tests.
 3. **Custom oxlint rule** — `starter/domain-no-infra-imports` (in `tools/oxlint-plugins/rules/`) blocks both static and dynamic imports from `src/infra/**` inside `src/domain/**` files.
 4. **Fallow custom boundaries** — `.fallowrc.json` defines explicit zones for `domain`, `infra`, `api`, `webapp`, and `server`, then fails `boundary-violation` issues in CI.
 
@@ -156,8 +157,8 @@ Every stage has a specific job. Understanding the _why_ matters as much as the c
 
 - **Pre-commit (lefthook)** — runs `oxlint --fix` and `oxfmt --write` on staged files (auto-restaged), then `vitest related --run --project unit` over the staged files and `pnpm codebase:audit` for codebase intelligence checks. _Why_: keeps git history clean and readable (no "fix lint" commits), and ensures every commit is **independently releasable** — no commit silently breaks the behaviour or architecture of code near the change.
 - **Pre-push (lefthook)** — `vitest run --changed origin/master --project unit`. Catches regressions across the whole change set before they leave the machine.
-- **`pnpm run ci`** (local + CI) — `oxlint && oxfmt --check . && pnpm typecheck:layers && pnpm codebase:audit`. Read-only quality gate; no fixes, no writes. The source of truth for "is this branch green?"
-- **GitHub Actions** — runs the same gate plus the test matrix (unit, browser, integration).
+- **`pnpm run ci`** (local + CI) — `pnpm lint:check && pnpm format:check && pnpm typecheck:layers && pnpm typecheck && pnpm typecheck:test && pnpm codebase:audit`. Read-only static quality gate; no fixes, no writes. The source of truth for "does this branch pass static analysis?"
+- **GitHub Actions** — runs the same static gate as named jobs plus the test matrix (unit, browser, integration, e2e) and build.
 - **Mutation Tests workflow** — `pnpm test:mutate` on pull requests that touch `src/domain/**`, `src/api/**`, unit tests, or mutation config, with manual dispatch available. It fails below an 80% mutation score.
 
 To skip hooks for a single command (e.g. an intentional WIP commit), set `LEFTHOOK=0`.
@@ -199,10 +200,10 @@ A short checklist for applying these conventions to a greenfield project:
 
 1. `pnpm init`, set `"packageManager": "pnpm@10.x"`.
 2. Create `src/domain`, `src/infra`, `src/utils` on day one, even if empty. Directory shape is a commitment.
-3. Copy the `tsconfig.json` + `tsconfig.domain.json` + `tsconfig.infra.json` trio; adjust the includes/aliases.
+3. Copy `tsconfig.json`, `tsconfig.app.json`, and the layer configs (`tsconfig.domain.json`, `tsconfig.infra.json`, `tsconfig.api.json`, `tsconfig.webapp.json`); adjust the includes/aliases.
 4. Set up `oxlint.config.ts` and `oxfmt.config.ts`. Copy `tools/oxlint-plugins/` and rename the `starter` namespace.
 5. Add `lefthook.yml` with pre-commit (lint + format + `vitest related --project unit` + `pnpm fallow:ci`) and pre-push (`vitest run --changed origin/master --project unit`).
-6. Add the `pnpm ci` script: lint → format check → layered typecheck → fallow audit.
+6. Add the `pnpm ci` script: lint check → format check → layered typecheck → full source typecheck → test typecheck → fallow audit.
 7. Add Stryker (`@stryker-mutator/core`, `@stryker-mutator/vitest-runner`), `stryker.config.mjs`, `vitest.mutation.config.ts`, and the `pnpm test:mutate` script with an 80% `thresholds.break` floor.
 8. Adopt the four test-type filename suffixes (`.unit`, `.browser`, `.integration`, `.e2e`) before writing any tests.
 9. Adopt `*.schema.ts` / `*.types.ts` before introducing any declaration-only module.

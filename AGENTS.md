@@ -17,6 +17,7 @@ This project uses **Vite 8**, **Vitest 4**, **Stryker**, **oxlint**, **oxfmt**, 
 - `pnpm test:browser` - Run browser tests only
 - `pnpm test:integration` - Run integration tests (requires Docker)
 - `pnpm test:e2e` - Run Playwright end-to-end tests
+- `pnpm test:coverage` - Run all Vitest projects with coverage
 - `pnpm test:mutate` - Run Stryker mutation tests against unit-tested source
 - `pnpm vitest run --project <name>` - Run a specific test project in CI mode (no watch)
 
@@ -29,8 +30,13 @@ This project uses **Vite 8**, **Vitest 4**, **Stryker**, **oxlint**, **oxfmt**, 
 ### Code Quality
 
 - `pnpm lint` - Lint and auto-fix with oxlint (includes local `starter/*` JS plugin rules in `tools/oxlint-plugins/`)
+- `pnpm lint:check` - Lint without writing fixes
 - `pnpm format` - Format code with oxfmt
-- `pnpm run ci` - Full CI check: lint, format, typecheck, and Fallow audit
+- `pnpm format:check` - Check formatting without writing fixes
+- `pnpm typecheck` - Type-check the full source project
+- `pnpm typecheck:layers` - Type-check domain, infra, api, and webapp layer configs
+- `pnpm typecheck:test` - Type-check tests and test setup
+- `pnpm run ci` - Full static CI check: lint, format, source typechecks, test typecheck, and Fallow audit
 
 ### Dependencies
 
@@ -47,7 +53,7 @@ This project uses **Vite 8**, **Vitest 4**, **Stryker**, **oxlint**, **oxfmt**, 
 - **oxlint config**: `oxlint.config.ts` (type-aware linting, ignore patterns)
 - **oxfmt config**: `oxfmt.config.ts` (formatting: no semi, single quotes)
 - **Fallow config**: `.fallowrc.json` (dead code analysis, dependency checks, custom architecture boundary zones)
-- **TypeScript**: `tsconfig.json` and layer-specific configs
+- **TypeScript**: `tsconfig.json`, `tsconfig.app.json`, and layer-specific configs
 
 ## Imports
 

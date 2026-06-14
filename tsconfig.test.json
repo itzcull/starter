@@ -3,5 +3,11 @@
   "compilerOptions": {
     "types": ["vite/client", "vitest/globals"]
   },
-  "include": ["**/*.test.ts", "**/*.test.tsx"]
+  "include": [
+    "worker-configuration.d.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "test/**/*.ts",
+    "vitest.setup.ts"
+  ]
 }
