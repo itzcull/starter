@@ -162,7 +162,7 @@ Migrations are generated from the schema and applied with the `db:*` scripts (`d
 
 ## Type safety & error handling
 
-TypeScript runs in full `strict` mode plus `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, and `noFallthroughCasesInSwitch` (`tsconfig.json`). On top of that, two patterns keep failures explicit:
+TypeScript runs in full `strict` mode plus `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, and `noFallthroughCasesInSwitch`. These live in `tsconfig.base.json`, which every other config (`tsconfig.json`, the layer configs, and the per-variant test configs) extends, so the strictness can't be quietly dropped in one corner. On top of that, two patterns keep failures explicit:
 
 - **Result over exceptions.** `src/domain/shared/result.ts` defines `Result<T, E>` — a discriminated union of `{ ok: true, value }` / `{ ok: false, error }` — plus an `AsyncResult<T, E>` alias and `ok()` / `err()` constructors. Domain operations that can fail return a `Result` instead of throwing, so callers must handle both branches and the type narrows on `result.ok`.
 - **Parse, don't validate.** Untrusted input is parsed into constrained types at the boundary with Zod (`*.schema.ts`), wired into HTTP routes via `@hono/zod-openapi`. Past the boundary, code trusts the types rather than re-checking the same data.
@@ -196,20 +196,25 @@ Examples from the repo: `src/domain/shared/result.unit.test.ts`, `src/infra/driz
 
 Unit tests are the load-bearing layer: they run on every staged-file commit and every push, and they drive the 100% domain-coverage expectation. Integration tests verify that adapter code actually talks to the thing it claims to. E2E tests keep the most important journeys honest. Browser tests catch regressions in DOM-dependent behaviour that jsdom-style runners miss.
 
-Each test type maps to a Vitest project or Playwright (`vitest.config.ts` defines the `unit`, `browser`, and `integration` projects; the `integration` project boots a Postgres testcontainer via `test/setup/global-setup.ts` and an MSW server via `test/setup/integration-setup.ts`). The principle is **mock only what you don't own**: third-party HTTP is faked with MSW, while your own database is exercised for real against a container.
+Each test type maps to a Vitest project or Playwright (`vitest.config.ts` defines the `unit`, `browser`, and `integration` projects; the `integration` project boots a Postgres testcontainer via `test/integration/global-setup.ts` and an MSW server via `test/integration/setup.ts`). The principle is **mock only what you don't own**: third-party HTTP is faked with MSW, while your own database is exercised for real against a container.
+
+**Test helpers and per-variant configs.** Test helpers are imported through `@test-utils/*` — a _variant-local_ alias that resolves to a different directory per test type: `test/unit/*`, `test/integration/*`, `test/browser/*`, or `e2e/test-utils/*`. Each level gets its own helper namespace, so a unit test can't reach for integration-only helpers (e.g. testcontainers) and the deep `../../../test/...` relative imports disappear. The alias is wired twice: a per-project `resolve.alias` in `vitest.config.ts` for the runtime, and a narrowed `paths` entry in each test config for the type-checker. Each variant also carries its own TypeScript config — `tsconfig.test.unit.json`, `tsconfig.test.integration.json`, `tsconfig.test.browser.json`, `tsconfig.test.e2e.json`, all extending the shared `tsconfig.base.json` — that models its runtime's APIs (node + `vitest/globals` for unit/integration, DOM + `@vitest/browser` for browser, node + Playwright for e2e), so the type-checker flags use of an API the runtime doesn't have. `tsconfig.test.json` aggregates the four through project references, and `pnpm typecheck:test` fans out to `typecheck:test:{unit,integration,browser,e2e}`. (Playwright needs `e2e/tsconfig.json` as a shim, because it resolves path aliases from the nearest `tsconfig.json` under the test dir.)
 
 **Rules (MUST / SHOULD):**
 
 - Every test file MUST use exactly one of the four suffixes (`.unit`, `.browser`, `.integration`, `.e2e`). The suffix selects the runner and the coverage expectation.
-- Tests MUST mock only what you don't own — third-party HTTP via the shared MSW `server` (`test/msw/server.ts`), where unhandled requests fail the test. Things you own (the database) MUST be exercised for real against a testcontainer.
+- Tests MUST mock only what you don't own — third-party HTTP via the shared MSW `server` (imported as `@test-utils/msw-server`), where unhandled requests fail the test. Things you own (the database) MUST be exercised for real against a testcontainer.
 - New adapter code MUST ship ≥1 `*.integration.test.ts`. Domain logic MUST keep its 100% unit-coverage expectation (and the ≥80% mutation score below).
 - Test data SHOULD come from factories (e.g. `src/infra/drizzle/user-factory.ts`), not inline literals; tests SHOULD assert behaviour (given/when/then), not implementation detail.
+- Test helpers MUST be imported via the variant-local `@test-utils/*` alias, not deep relative paths.
+- Each test variant MUST type-check under its own `tsconfig.test.<variant>.json` modelling its runtime; don't add DOM libs to node-only variants, or `@infra` to the browser/e2e configs.
 
 **Aligning an existing repo:**
 
 1. Define Vitest `projects` for unit/browser/integration keyed on the suffixes; add Playwright for `.e2e`.
 2. Add a global setup that starts a DB testcontainer and an MSW server with `onUnhandledRequest: 'error'`.
 3. Rename existing tests to the four-suffix scheme and add factories for shared fixtures.
+4. Add a variant-local `@test-utils/*` alias (per-project `resolve.alias` in `vitest.config.ts` + a narrowed `paths` entry per test config), and split `tsconfig.test.json` into per-variant configs that extend a shared `tsconfig.base.json`.
 
 ## Mutation Testing
 
@@ -293,7 +298,7 @@ Scripts in `package.json` follow a few conventions so the command surface stays 
 
 - **Namespaced groups.** Related commands share a prefix — `test:*`, `typecheck:*`, `codebase:*`, `db:*` — so they're discoverable and tab-completable.
 - **Stable names over tools.** The `codebase:*` scripts are tool-agnostic aliases; fallow is the current implementation behind them (`codebase:audit` → `fallow audit`). Hooks and CI call the stable name, so the analyzer can be swapped without touching them. `fallow:ci` is itself an alias for `codebase:audit`.
-- **Composite gates, fail-fast.** `ci`, `fix`, and `typecheck:layers` chain sub-commands with `&&`, so the first failure stops the run and there's one memorable entry point — `pnpm run ci` is the whole static gate, `pnpm fix` is lint + format, `pnpm typecheck:layers` is the four layer checks.
+- **Composite gates, fail-fast.** `ci`, `fix`, `typecheck:layers`, and `typecheck:test` chain sub-commands with `&&`, so the first failure stops the run and there's one memorable entry point — `pnpm run ci` is the whole static gate, `pnpm fix` is lint + format, `pnpm typecheck:layers` is the four layer checks, and `pnpm typecheck:test` fans out to `typecheck:test:{unit,integration,browser,e2e}` (one per test variant).
 - **Check vs write pairs.** `lint`/`lint:check` and `format`/`format:check` — write variants for local dev, `:check` variants for CI so CI never mutates the tree.
 - **Lifecycle hook.** `prepare` runs `lefthook install`, so git hooks self-install on `pnpm install`.
 
