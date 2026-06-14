@@ -1,0 +1,5 @@
+{
+  // Playwright resolves path aliases from the nearest tsconfig.json under testDir.
+  // Keep this shim so E2E tests inherit the dedicated test config.
+  "extends": "../tsconfig.test.e2e.json"
+}

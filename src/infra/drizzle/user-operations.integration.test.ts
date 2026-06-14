@@ -3,8 +3,8 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest'
 import * as schema from '@infra/drizzle/schema'
+import { truncateAllTables } from '@test-utils/test-database'
 import { createTestSession, createTestUser } from './user-factory'
-import { truncateAllTables } from '../../../test/setup/test-database'
 
 describe('User database operations', () => {
   let db: ReturnType<typeof drizzle<typeof schema>>

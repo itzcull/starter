@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "@domain/*": ["./src/domain/*"],
+      "@infra/*": ["./src/infra/*"],
+      "@theme": ["./src/webapp/theme"],
+      "@test-utils/*": ["./test/unit/*"]
+    }
+  },
+  "include": [
+    "worker-configuration.d.ts",
+    "src/**/*.unit.test.ts",
+    "src/**/*.unit.test.tsx",
+    "tools/**/*.unit.test.ts",
+    "tools/oxlint-plugins/**/*.ts",
+    "test/unit/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "build"]
+}

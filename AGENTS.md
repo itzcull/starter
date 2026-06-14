@@ -35,7 +35,11 @@ This project uses **Vite 8**, **Vitest 4**, **Stryker**, **oxlint**, **oxfmt**, 
 - `pnpm format:check` - Check formatting without writing fixes
 - `pnpm typecheck` - Type-check the full source project
 - `pnpm typecheck:layers` - Type-check domain, infra, api, and webapp layer configs
-- `pnpm typecheck:test` - Type-check tests and test setup
+- `pnpm typecheck:test` - Type-check all test variants
+- `pnpm typecheck:test:unit` - Type-check `*.unit.test.{ts,tsx}` with unit-only test helpers
+- `pnpm typecheck:test:integration` - Type-check `*.integration.test.{ts,tsx}` and integration setup helpers
+- `pnpm typecheck:test:browser` - Type-check `*.browser.test.{ts,tsx}` and browser setup
+- `pnpm typecheck:test:e2e` - Type-check Playwright E2E tests and config
 - `pnpm run ci` - Full static CI check: lint, format, source typechecks, test typecheck, and Fallow audit
 
 ### Dependencies
@@ -54,6 +58,7 @@ This project uses **Vite 8**, **Vitest 4**, **Stryker**, **oxlint**, **oxfmt**, 
 - **oxfmt config**: `oxfmt.config.ts` (formatting: no semi, single quotes)
 - **Fallow config**: `.fallowrc.json` (dead code analysis, dependency checks, custom architecture boundary zones)
 - **TypeScript**: `tsconfig.json`, `tsconfig.app.json`, and layer-specific configs
+- **Test TypeScript**: `tsconfig.test.unit.json`, `tsconfig.test.integration.json`, `tsconfig.test.browser.json`, and `tsconfig.test.e2e.json` each model the runtime APIs for their test type. `@test-utils/*` is variant-local: unit tests resolve it to `test/unit/*`, integration tests to `test/integration/*`, browser tests to `test/browser/*`, and E2E tests to `e2e/test-utils/*`.
 
 ## Imports
 

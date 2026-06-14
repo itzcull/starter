@@ -1,13 +1,9 @@
 {
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "types": ["vite/client", "vitest/globals"]
-  },
-  "include": [
-    "worker-configuration.d.ts",
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "test/**/*.ts",
-    "vitest.setup.ts"
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.test.unit.json" },
+    { "path": "./tsconfig.test.integration.json" },
+    { "path": "./tsconfig.test.browser.json" },
+    { "path": "./tsconfig.test.e2e.json" }
   ]
 }
