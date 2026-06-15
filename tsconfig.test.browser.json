@@ -5,13 +5,11 @@
     "types": ["vite/client", "vitest/globals", "@vitest/browser"],
     "paths": {
       "@domain/*": ["./src/domain/*"],
-      "@infra/*": ["./src/infra/*"],
       "@theme": ["./src/webapp/theme"],
       "@test-utils/*": ["./test/browser/*"]
     }
   },
   "include": [
-    "worker-configuration.d.ts",
     "src/**/*.browser.test.ts",
     "src/**/*.browser.test.tsx",
     "test/**/*.browser.test.ts",
