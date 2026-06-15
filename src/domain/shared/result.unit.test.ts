@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { createTestNumber } from '@test-utils/result-values'
 import { ok, err, type Result } from './result'
+
+type TestNumberOptions = {
+  readonly value?: number
+}
+
+const createTestNumber = ({ value = 42 }: TestNumberOptions = {}): number => value
 
 describe('Result', () => {
   describe('ok', () => {
