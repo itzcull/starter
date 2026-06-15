@@ -4,6 +4,8 @@ A starter template for full-stack apps on **Cloudflare Workers** with **Vite 8**
 
 This README is both **descriptive** (what the repo enforces today) and **prescriptive** (the conventions you should keep if you adopt this starter). Commands and config details live in `AGENTS.md`; this file explains _why_ they exist.
 
+Most sections below carry two extra blocks so the conventions are machine-actionable: **Rules (MUST / SHOULD)** — the constraints to uphold — and **Aligning an existing repo** — concrete steps to retrofit a codebase to the convention. Exact dependency versions are intentionally omitted from the prose; [`package.json`](./package.json) is the single source of truth for them.
+
 ## Toolchain at a glance
 
 - **Runtime**: Cloudflare Workers (via `wrangler` + `@cloudflare/vite-plugin`)
@@ -11,10 +13,13 @@ This README is both **descriptive** (what the repo enforces today) and **prescri
 - **Build**: Vite 8
 - **Tests**: Vitest 4 (unit + browser + integration), Playwright (e2e), Stryker (mutation)
 - **DB**: Drizzle ORM + Postgres
+- **Auth**: better-auth
 - **Lint / format**: oxlint, oxfmt
 - **Typecheck**: full source plus layered (`tsconfig.domain.json`, `tsconfig.infra.json`, `tsconfig.api.json`, `tsconfig.webapp.json`)
 - **Codebase intelligence**: [fallow](#codebase-intelligence-fallow)
 - **Git hooks**: lefthook
+
+Versions are pinned in [`package.json`](./package.json) — read them from there, not from this document. See [Reproducing this setup in your own repo](#reproducing-this-setup-in-your-own-repo) for grouped install commands.
 
 ## Getting started
 
@@ -69,6 +74,21 @@ Business logic lives in pure TypeScript. Frameworks, databases, and external ser
 
 Any one of the four would catch most mistakes; all four together make the violation loud and local.
 
+**Rules (MUST / SHOULD):**
+
+- `src/domain/**` MUST NOT import from `src/infra/**`, framework globals, or Node/Workers APIs. It MAY import `src/utils/**`.
+- Dependencies MUST flow downward only: infra → domain; api → domain + infra; webapp → domain + api; server → all. (This is the `boundaries.rules` table in `.fallowrc.json`.)
+- The domain→infra boundary MUST stay enforced in all four places — don't disable one and lean on the others.
+- Infra adapters SHOULD be named for the entity/capability (`user-repository.ts`), not the technology; the folder denotes the tech.
+- Interfaces the domain needs (ports) MUST live in the domain as `*.types.ts` and be implemented by infra.
+
+**Aligning an existing repo:**
+
+1. Create `src/domain`, `src/infra`, `src/api`, `src/webapp` (and `src/utils` for third-party wrappers); add `@domain/*` and `@infra/*` to `tsconfig.json` `paths`.
+2. Add the four layer tsconfigs and a `typecheck:layers` script that runs them in order.
+3. Copy `tools/oxlint-plugins/`, rename the `starter` namespace, and enable `<ns>/domain-no-infra-imports` in `oxlint.config.ts`.
+4. Add `boundaries.zones` + `boundaries.rules` to `.fallowrc.json` mirroring the dependency direction, with `boundary-violation: error`.
+
 ## Directory layout
 
 ```
@@ -101,6 +121,66 @@ test/                           # shared test setup (database harness, factories
 e2e/                            # Playwright specs
 ```
 
+## Configuration & environment
+
+Configuration is read from the runtime, not from `process.env` scattered through the code. On Workers, Cloudflare injects an `Env` object (typed as `Cloudflare.Env`) that Hono exposes per-request as `c.env` — `c.env.HYPERDRIVE.connectionString`, `c.env.BETTER_AUTH_SECRET`, and so on. Bindings and plain vars are declared in `wrangler.jsonc` (`hyperdrive`, `vars`); `pnpm typegen` regenerates the `Cloudflare.Env` types from that file so the bindings stay typed.
+
+Secrets and local overrides live in untracked `.env` / `.dev.vars`, with `.env.example` / `.dev.vars.example` as the committed templates. In Conductor workspaces, `.conductor/setup.sh` symlinks `.env` and `.dev.vars` from the root repo so every parallel workspace shares one set of credentials. Tooling that needs a value at config time fails fast when it's missing — `drizzle.config.ts` throws if `DATABASE_URL` is unset rather than running against an undefined database.
+
+Local Postgres comes from the root `docker-compose.yml` (`postgres:18`, reachable at `localhost:5432`), started inside the dev container — never on the host (see [Getting started](#getting-started)).
+
+**Rules (MUST / SHOULD):**
+
+- App code MUST read config from the injected runtime env (`c.env`), not module-level `process.env`. Required values MUST fail fast when absent.
+- Every binding/var MUST be declared in `wrangler.jsonc`; run `pnpm typegen` after changing it.
+- Secrets MUST NOT be committed. New ones MUST be added to `.env.example` / `.dev.vars.example` as empty placeholders.
+
+**Aligning an existing repo:**
+
+1. Funnel scattered `process.env.*` reads to a single composition boundary that receives the runtime env.
+2. Declare bindings + vars in `wrangler.jsonc`; commit `.example` templates and gitignore the real files.
+3. On Conductor, add `.conductor/setup.sh` to symlink env files; otherwise document a `cp .env.example .env` step.
+
+## Data & persistence
+
+Drizzle ORM is the database adapter (the `database/postgres` slot in the hexagon). The schema is defined as TypeScript in `src/infra/drizzle/schema/`, and the row types are _inferred from the schema_ (`InferSelectModel` / `InferInsertModel` in `src/infra/drizzle/types.ts`) — the schema is the single source of truth, so types can never drift from the table definition. The connection is built by a `createDatabase(connectionString)` factory (`src/infra/drizzle/client.ts`), so the driver is injected rather than imported as a global singleton.
+
+Migrations are generated from the schema and applied with the `db:*` scripts (`db:generate`, `db:push`, `db:migrate`, `db:studio`); `drizzle.config.ts` points at the schema and reads `DATABASE_URL`. In production, Cloudflare Hyperdrive pools the Postgres connection at the edge. Integration tests run the real adapter against a Postgres testcontainer (see [Testing strategy](#testing-strategy)) — the database is never mocked.
+
+**Rules (MUST / SHOULD):**
+
+- Row/insert types MUST be inferred from the schema, never hand-written in parallel.
+- Database access MUST go through the `createDatabase` factory so the connection is injected; no top-level client singletons in domain/api code.
+- Schema changes MUST be captured as migrations via `pnpm db:generate`; applied migrations MUST NOT be hand-edited.
+- Each repository/adapter SHOULD ship ≥1 `*.integration.test.ts` against a real testcontainer.
+
+**Aligning an existing repo:**
+
+1. Put the schema in `src/infra/<orm>/schema/`; export inferred types from a sibling `types.ts`.
+2. Wrap connection creation in a `createDatabase(connectionString)` factory injected at the api boundary.
+3. Add `db:*` scripts and a config that reads the DB URL from env and throws if it's missing.
+
+## Type safety & error handling
+
+TypeScript runs in full `strict` mode plus `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, and `noFallthroughCasesInSwitch`. These live in `tsconfig.base.json`, which every other config (`tsconfig.json`, the layer configs, and the per-variant test configs) extends, so the strictness can't be quietly dropped in one corner. On top of that, two patterns keep failures explicit:
+
+- **Result over exceptions.** `src/domain/shared/result.ts` defines `Result<T, E>` — a discriminated union of `{ ok: true, value }` / `{ ok: false, error }` — plus an `AsyncResult<T, E>` alias and `ok()` / `err()` constructors. Domain operations that can fail return a `Result` instead of throwing, so callers must handle both branches and the type narrows on `result.ok`.
+- **Parse, don't validate.** Untrusted input is parsed into constrained types at the boundary with Zod (`*.schema.ts`), wired into HTTP routes via `@hono/zod-openapi`. Past the boundary, code trusts the types rather than re-checking the same data.
+
+Declaration-only modules carry explicit suffixes (`*.types.ts`, `*.schema.ts`) and are coverage-exempt (see [Module filename conventions](#module-filename-conventions)).
+
+**Rules (MUST / SHOULD):**
+
+- `strict` MUST stay on; don't weaken compiler flags to land a change — fix the types.
+- Fallible domain operations SHOULD return `Result` / `AsyncResult` rather than throwing.
+- External input MUST be parsed (Zod) at the boundary into a typed value; downstream code MUST NOT re-validate it.
+
+**Aligning an existing repo:**
+
+1. Turn on `strict` plus the `noUnused*` / `noImplicitReturns` / `noFallthroughCasesInSwitch` flags.
+2. Add a `Result` type to the domain and adopt it for operations that currently throw on expected failures.
+3. Define Zod schemas at each input boundary; infer the parsed type and drop redundant downstream checks.
+
 ## Testing strategy
 
 Four test types. The filename tells you which, because it reads like the test type it is.
@@ -115,6 +195,26 @@ Four test types. The filename tells you which, because it reads like the test ty
 Examples from the repo: `src/domain/shared/result.unit.test.ts`, `src/infra/drizzle/user-operations.integration.test.ts`, `e2e/home.e2e.test.ts`, and the oxlint plugin's `tools/oxlint-plugins/rules/domain-no-infra-imports.unit.test.ts`.
 
 Unit tests are the load-bearing layer: they run on every staged-file commit and every push, and they drive the 100% domain-coverage expectation. Integration tests verify that adapter code actually talks to the thing it claims to. E2E tests keep the most important journeys honest. Browser tests catch regressions in DOM-dependent behaviour that jsdom-style runners miss.
+
+Each test type maps to a Vitest project or Playwright (`vitest.config.ts` defines the `unit`, `browser`, and `integration` projects; the `integration` project boots a Postgres testcontainer via `test/integration/global-setup.ts` and an MSW server via `test/integration/setup.ts`). The principle is **mock only what you don't own**: third-party HTTP is faked with MSW, while your own database is exercised for real against a container.
+
+**Test helpers and per-variant configs.** Test helpers are imported through `@test-utils/*` — a _variant-local_ alias that resolves to a different directory per test type: `test/unit/*`, `test/integration/*`, `test/browser/*`, or `e2e/test-utils/*`. Each level gets its own helper namespace, so a unit test can't reach for integration-only helpers (e.g. testcontainers) and the deep `../../../test/...` relative imports disappear. The alias is wired twice: a per-project `resolve.alias` in `vitest.config.ts` for the runtime, and a narrowed `paths` entry in each test config for the type-checker. Each variant also carries its own TypeScript config — `tsconfig.test.unit.json`, `tsconfig.test.integration.json`, `tsconfig.test.browser.json`, `tsconfig.test.e2e.json`, all extending the shared `tsconfig.base.json` — that models its runtime's APIs (node + `vitest/globals` for unit/integration, DOM + `@vitest/browser` for browser, node + Playwright for e2e), so the type-checker flags use of an API the runtime doesn't have. `tsconfig.test.json` aggregates the four through project references, and `pnpm typecheck:test` fans out to `typecheck:test:{unit,integration,browser,e2e}`. (Playwright needs `e2e/tsconfig.json` as a shim, because it resolves path aliases from the nearest `tsconfig.json` under the test dir.)
+
+**Rules (MUST / SHOULD):**
+
+- Every test file MUST use exactly one of the four suffixes (`.unit`, `.browser`, `.integration`, `.e2e`). The suffix selects the runner and the coverage expectation.
+- Tests MUST mock only what you don't own — third-party HTTP via the shared MSW `server` (imported as `@test-utils/msw-server`), where unhandled requests fail the test. Things you own (the database) MUST be exercised for real against a testcontainer.
+- New adapter code MUST ship ≥1 `*.integration.test.ts`. Domain logic MUST keep its 100% unit-coverage expectation (and the ≥80% mutation score below).
+- Test data SHOULD come from factories (e.g. `src/infra/drizzle/user-factory.ts`), not inline literals; tests SHOULD assert behaviour (given/when/then), not implementation detail.
+- Test helpers MUST be imported via the variant-local `@test-utils/*` alias, not deep relative paths.
+- Each test variant MUST type-check under its own `tsconfig.test.<variant>.json` modelling its runtime; don't add DOM libs to node-only variants, or `@infra` to the browser/e2e configs.
+
+**Aligning an existing repo:**
+
+1. Define Vitest `projects` for unit/browser/integration keyed on the suffixes; add Playwright for `.e2e`.
+2. Add a global setup that starts a DB testcontainer and an MSW server with `onUnhandledRequest: 'error'`.
+3. Rename existing tests to the four-suffix scheme and add factories for shared fixtures.
+4. Add a variant-local `@test-utils/*` alias (per-project `resolve.alias` in `vitest.config.ts` + a narrowed `paths` entry per test config), and split `tsconfig.test.json` into per-variant configs that extend a shared `tsconfig.base.json`.
 
 ## Mutation Testing
 
@@ -131,6 +231,36 @@ Configuration lives in `stryker.config.mjs`. Stryker uses `vitest.mutation.confi
 Current mutation scope is `src/domain/**` and `src/api/**`, excluding tests, declarations, and declaration-only `*.types.ts` / `*.schema.ts` modules. Expand the `mutate` globs only when the new code has fast behavioural unit tests; do not add browser, integration, generated, or adapter-only code to the default mutation target set.
 
 The mutation score must stay at or above **80%**. `thresholds.break` enforces this in Stryker, so `pnpm test:mutate` and the mutation CI workflow fail below that floor. HTML reports are written under `reports/` for local investigation.
+
+**Rules (MUST / SHOULD):**
+
+- The mutation score MUST stay ≥ **80%** (`thresholds.break`); both `pnpm test:mutate` and the mutation workflow fail below it.
+- The `mutate` globs MUST stay scoped to `src/domain/**` + `src/api/**` (tests/declarations excluded); add globs only for code with fast behavioural unit tests.
+- Mutation MUST run only the unit project (`vitest.mutation.config.ts`) — no browser/integration/e2e in the loop.
+
+**Aligning an existing repo:**
+
+1. Add `@stryker-mutator/core` + the Vitest runner; point Stryker at a unit-only Vitest config.
+2. Set `thresholds.break` to your floor (80% here) and scope `mutate` to the business-logic layers.
+3. Gate it in CI on changes to those layers (see [Continuous integration](#continuous-integration)).
+
+## Linting & formatting
+
+oxlint (type-aware: `typeAware` + `typeCheck` in `oxlint.config.ts`) is the linter; oxfmt is the formatter (`semi: false`, `singleQuote: true`). Both are Rust-native and run in milliseconds, which is what makes them viable inside the pre-commit hook. Architectural rules a per-file linter can't normally express are added as a local JS plugin under `tools/oxlint-plugins/` — currently `starter/domain-no-infra-imports` (see [`tools/oxlint-plugins/README.md`](./tools/oxlint-plugins/README.md) for the rule and how to add more). Generated files (`src/webapp/routeTree.gen.ts`, `worker-configuration.d.ts`, `dist/**`) are ignored by both.
+
+Each tool has a write variant and a check variant — `lint` / `lint:check`, `format` / `format:check`: the write variants fix locally, the `:check` variants are read-only for CI. Editors format on save through the oxc language servers (`.vscode/settings.json`, `.zed/settings.json`, the latter also disabling Prettier). Markdown — including this file — is outside the oxlint/oxfmt globs, so it isn't auto-formatted.
+
+**Rules (MUST / SHOULD):**
+
+- `pnpm lint:check` and `pnpm format:check` MUST pass with zero findings before merge; CI runs the read-only variants.
+- Project-specific architectural constraints SHOULD be encoded as oxlint plugin rules (with a co-located `*.unit.test.ts`), not left to review.
+- Generated files MUST be listed in both tools' `ignorePatterns`.
+
+**Aligning an existing repo:**
+
+1. Add `oxlint` + `oxfmt`, create `oxlint.config.ts` / `oxfmt.config.ts`, and ignore generated files.
+2. Add the four script pairs (`lint`/`lint:check`, `format`/`format:check`).
+3. Port custom rules into `tools/oxlint-plugins/` and enable them under your own namespace.
 
 ## Module filename conventions
 
@@ -151,6 +281,39 @@ See [Testing strategy](#testing-strategy) for the tool and coverage expectation 
 
 Rule of thumb: if a module contains only declarations, use `*.schema.ts` or `*.types.ts`. If it contains behaviour, don't — and use the matching `*.test.ts` suffix for its tests.
 
+**Rules (MUST / SHOULD):**
+
+- A declaration-only module MUST use `*.schema.ts` (validation schemas) or `*.types.ts` (types/interfaces, including ports); both are coverage-exempt.
+- A module containing behaviour MUST NOT use those suffixes, and its tests MUST use the matching `*.test.ts` suffix.
+- Interfaces MUST be `*.types.ts`; don't introduce a `*.interface.ts` suffix.
+
+**Aligning an existing repo:**
+
+1. Rename declaration-only files to `*.types.ts` / `*.schema.ts` and point coverage/mutation exemptions at those globs.
+2. Adopt the four test suffixes before writing new tests.
+
+## Scripts
+
+Scripts in `package.json` follow a few conventions so the command surface stays predictable; the exhaustive list is in [`AGENTS.md`](./AGENTS.md).
+
+- **Namespaced groups.** Related commands share a prefix — `test:*`, `typecheck:*`, `codebase:*`, `db:*` — so they're discoverable and tab-completable.
+- **Stable names over tools.** The `codebase:*` scripts are tool-agnostic aliases; fallow is the current implementation behind them (`codebase:audit` → `fallow audit`). Hooks and CI call the stable name, so the analyzer can be swapped without touching them. `fallow:ci` is itself an alias for `codebase:audit`.
+- **Composite gates, fail-fast.** `ci`, `fix`, `typecheck:layers`, and `typecheck:test` chain sub-commands with `&&`, so the first failure stops the run and there's one memorable entry point — `pnpm run ci` is the whole static gate, `pnpm fix` is lint + format, `pnpm typecheck:layers` is the four layer checks, and `pnpm typecheck:test` fans out to `typecheck:test:{unit,integration,browser,e2e}` (one per test variant).
+- **Check vs write pairs.** `lint`/`lint:check` and `format`/`format:check` — write variants for local dev, `:check` variants for CI so CI never mutates the tree.
+- **Lifecycle hook.** `prepare` runs `lefthook install`, so git hooks self-install on `pnpm install`.
+
+**Rules (MUST / SHOULD):**
+
+- New commands MUST join the right namespace (`test:`, `typecheck:`, `codebase:`, `db:`).
+- Tooling invoked by hooks/CI SHOULD be reached through a stable script alias, not the raw binary, when the tool might be swapped.
+- CI-facing scripts MUST be read-only (`:check` variants); composite gates MUST chain with `&&`.
+
+**Aligning an existing repo:**
+
+1. Group scripts by prefix and add `ci` / `fix` composites.
+2. Put third-party analyzers behind `codebase:*`-style aliases.
+3. Add a `prepare` script that installs your hook manager.
+
 ## Quality gates
 
 Every stage has a specific job. Understanding the _why_ matters as much as the commands.
@@ -158,16 +321,58 @@ Every stage has a specific job. Understanding the _why_ matters as much as the c
 - **Pre-commit (lefthook)** — runs `oxlint --fix` and `oxfmt --write` on staged files (auto-restaged), then `vitest related --run --project unit` over the staged files and `pnpm codebase:audit` for codebase intelligence checks. _Why_: keeps git history clean and readable (no "fix lint" commits), and ensures every commit is **independently releasable** — no commit silently breaks the behaviour or architecture of code near the change.
 - **Pre-push (lefthook)** — `vitest run --changed origin/master --project unit`. Catches regressions across the whole change set before they leave the machine.
 - **`pnpm run ci`** (local + CI) — `pnpm lint:check && pnpm format:check && pnpm typecheck:layers && pnpm typecheck && pnpm typecheck:test && pnpm codebase:audit`. Read-only static quality gate; no fixes, no writes. The source of truth for "does this branch pass static analysis?"
-- **GitHub Actions** — runs the same static gate as named jobs plus the test matrix (unit, browser, integration, e2e) and build.
+- **GitHub Actions** — runs the same static gate as named jobs plus the test matrix (unit, browser, integration, e2e) and build. See [Continuous integration](#continuous-integration).
 - **Mutation Tests workflow** — `pnpm test:mutate` on pull requests that touch `src/domain/**`, `src/api/**`, unit tests, or mutation config, with manual dispatch available. It fails below an 80% mutation score.
 
 To skip hooks for a single command (e.g. an intentional WIP commit), set `LEFTHOOK=0`.
+
+**Rules (MUST / SHOULD):**
+
+- Pre-commit MUST lint + format staged files (auto-restaged), run the related unit tests, and run `codebase:audit`. Pre-push MUST run the changed unit tests against `origin/master`.
+- `pnpm run ci` MUST stay read-only and is the source of truth for static-analysis pass/fail.
+- Hooks MAY be skipped for one command with `LEFTHOOK=0`, but the same checks MUST still pass in CI.
+
+**Aligning an existing repo:**
+
+1. Add lefthook (`prepare: lefthook install`) with pre-commit + pre-push jobs mirroring the above.
+2. Add the `ci` composite and run it both locally (pre-merge) and in CI.
+
+## Continuous integration
+
+GitHub Actions enforces the same gates as the local hooks, plus the full test matrix and build. The workflow files are the source of truth — see [`.github/workflows/`](./.github/workflows/).
+
+- **`ci.yml` ("CI Tests")** runs on every PR to `master`, with `concurrency` cancelling superseded runs on the same ref. The static gate is split into separate, parallel named jobs — `lint`, `typecheck`, `codebase-audit` — rather than one `pnpm run ci` call, so a failure points at the exact check and the jobs run concurrently. The test matrix is likewise parallel jobs: `test-unit`, `test-browser` (installs the Chromium binary first), and `test-integration` (sets `TESTCONTAINERS_RYUK_DISABLED=true`, since the ephemeral runner cleans itself up). `build` runs standalone, and `test-e2e` declares `needs: [build]` and brings up its own `postgres:18` service. `codebase-audit` checks out full history (`fetch-depth: 0`) and scopes analysis to `--base origin/<base-ref>`. Every job pins **Node 22** and installs with `pnpm install --frozen-lockfile`.
+- **`mutation.yml` ("Mutation Tests")** is path-filtered: it runs `pnpm test:mutate` only when `src/domain/**`, `src/api/**`, unit tests, or the mutation config change (plus manual `workflow_dispatch`), because the mutation loop is too slow to run on every PR.
+- **`deploy.yml` ("Deploy")** is manual `workflow_dispatch` only — the `push` trigger is commented out until the Cloudflare secrets (`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`) are set — and uses `concurrency: cancel-in-progress: false` so an in-flight production deploy is never interrupted.
+
+**Rules (MUST / SHOULD):**
+
+- The static checks and the test matrix MUST run as parallel jobs on every PR to `master`.
+- Installs MUST use `--frozen-lockfile`; every job MUST pin the Node version (22).
+- `test-e2e` MUST `needs: [build]` and MUST provide its own Postgres service.
+- Slow gates (mutation) MUST be path-filtered; deploy MUST be guarded (manual trigger + non-cancelling concurrency + secrets).
+
+**Aligning an existing repo:**
+
+1. Add a PR workflow whose jobs mirror `pnpm run ci` plus per-suffix test jobs; pin Node and use `--frozen-lockfile`.
+2. Add a path-filtered mutation workflow and a manual, secret-gated deploy workflow.
+3. Set `concurrency` to cancel superseded CI runs but never deploys.
 
 ## Runtime choices
 
 - **Hono** as the HTTP server — deliberately runtime-agnostic. If Cloudflare Workers stops fitting (a cold-start regression, a pricing change, a feature Workers can't express), the Hono app moves to Node / Bun / Deno / a container with near-zero rewrite.
 - **Cloudflare Workers** as the starter runtime — chosen because it's exceptionally cheap and fast out of the box, with a global edge by default. Drizzle + Hyperdrive give Postgres access without managing a connection pool.
 - **The swap path** — `src/api/` is the composition boundary. Replace `src/server.ts` (the Workers entry) with a different runtime adapter to change runtime; the app factory does not change.
+
+**Rules (MUST / SHOULD):**
+
+- All HTTP MUST be defined on the Hono app, never bound directly to a Workers handler, so the runtime stays swappable.
+- A runtime change MUST happen only at `src/server.ts` (the runtime adapter); the app factory in `src/api/` MUST NOT change.
+
+**Aligning an existing repo:**
+
+1. Define your HTTP surface on a runtime-agnostic framework (Hono).
+2. Keep the runtime entry (`server.ts`) as the only runtime-specific file; compose the app in `src/api/`.
 
 ## Codebase intelligence (fallow)
 
@@ -179,7 +384,7 @@ To skip hooks for a single command (e.g. an intentional WIP commit), set `LEFTHO
 - **Circular dependencies**
 - **Architecture drift**
 
-Use the `codebase:*` scripts for stable, tool-agnostic commands. Fallow is the current implementation behind them:
+Use the `codebase:*` scripts for stable, tool-agnostic commands — they're aliases (see [Scripts](#scripts)), and fallow is the current implementation behind them:
 
 ```sh
 pnpm codebase:analyze             # full analysis (dead code + dupes + health)
@@ -196,6 +401,38 @@ pnpm codebase:fix:dry-run         # preview auto-fixes for unused exports/deps
 
 ## Reproducing this setup in your own repo
 
+### Install the toolchain
+
+Versions live in [`package.json`](./package.json) — copy them from there. The commands below intentionally omit version pins.
+
+```sh
+# Package manager (pin the version from package.json)
+corepack enable
+corepack prepare pnpm@<version-from-package.json> --activate
+
+# App, runtime, build
+pnpm add react react-dom @tanstack/react-start @tanstack/react-router @chakra-ui/react @emotion/react
+pnpm add -D vite @vitejs/plugin-react @cloudflare/vite-plugin wrangler
+
+# Data, auth, HTTP
+pnpm add drizzle-orm postgres hono @hono/zod-openapi zod better-auth
+pnpm add -D drizzle-kit
+
+# Lint, format, codebase intelligence, hooks, types
+pnpm add -D oxlint oxfmt fallow lefthook typescript
+
+# Testing
+pnpm add -D vitest @vitest/browser @vitest/browser-playwright @vitest/coverage-v8 \
+  @playwright/test testcontainers @testcontainers/postgresql msw \
+  @testing-library/react @testing-library/jest-dom @testing-library/user-event \
+  @stryker-mutator/core @stryker-mutator/vitest-runner
+
+# Install git hooks
+pnpm run prepare
+```
+
+### Then apply the conventions
+
 A short checklist for applying these conventions to a greenfield project:
 
 1. `pnpm init`, set `"packageManager": "pnpm@10.x"`.
@@ -209,10 +446,19 @@ A short checklist for applying these conventions to a greenfield project:
 9. Adopt `*.schema.ts` / `*.types.ts` before introducing any declaration-only module.
 10. Put your HTTP server behind Hono so the runtime stays swappable.
 11. Wire fallow with `.fallowrc.json` to catch dead code and duplication as the project grows.
+12. Mirror the local gates in CI: parallel static + test-matrix jobs, path-filtered mutation, and a guarded deploy (see [Continuous integration](#continuous-integration)).
 
 ## Reference
 
 - [`AGENTS.md`](./AGENTS.md) — commands, imports, hook commands, and agent workflow notes.
-- `.fallowrc.json` — fallow configuration.
-- `stryker.config.mjs` and `vitest.mutation.config.ts` — mutation testing configuration.
+- [`package.json`](./package.json) — dependency versions (source of truth) and the full script list.
+- [`.github/workflows/`](./.github/workflows/) — `ci.yml`, `mutation.yml`, and `deploy.yml` pipelines.
+- `tsconfig*.json` — base strict config plus the layered configs.
+- `oxlint.config.ts` / `oxfmt.config.ts` — lint and format configuration.
 - `tools/oxlint-plugins/README.md` — the custom lint plugin, including `domain-no-infra-imports`.
+- `.fallowrc.json` — fallow configuration (boundary zones and rules).
+- `stryker.config.mjs` and `vitest.mutation.config.ts` — mutation testing configuration.
+- `wrangler.jsonc` — Cloudflare Workers config (bindings, vars).
+- `drizzle.config.ts` — database schema/migration configuration.
+- `lefthook.yml` — git hook definitions.
+- `.devcontainer/` — dev container definition and post-create setup.
