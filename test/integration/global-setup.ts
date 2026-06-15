@@ -12,7 +12,7 @@ export const setup = async ({ provide }: TestProject): Promise<void> => {
 
   const { connectionString, db, sqlClient } = await createTestDatabase()
 
-  console.log('[Global Setup] Pushing schema to test database...')
+  console.log('[Global Setup] Applying migrations to test database...')
   await pushSchema(db)
 
   await closeConnection(sqlClient)

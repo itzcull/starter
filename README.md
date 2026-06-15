@@ -129,11 +129,15 @@ Secrets and local overrides live in untracked `.env` / `.dev.vars`, with `.env.e
 
 Local Postgres comes from the root `docker-compose.yml` (`postgres:18`, reachable at `localhost:5432`), started inside the dev container — never on the host (see [Getting started](#getting-started)).
 
+`wrangler types` preserves literal values for plain `vars`, so a config value like `"false"` can be emitted as the literal type `"false"` instead of `string`. When code intentionally compares an env flag against another value, widen it at the boundary with `String(c.env.FEATURE_FLAG) === 'true'`. For third-party services, prefer an env-gated stub mode at the `src/api/` composition boundary (for example `<SERVICE>_STUB_MODE`) so local dev and E2E can run without live external credentials while production wiring remains explicit.
+
 **Rules (MUST / SHOULD):**
 
 - App code MUST read config from the injected runtime env (`c.env`), not module-level `process.env`. Required values MUST fail fast when absent.
 - Every binding/var MUST be declared in `wrangler.jsonc`; run `pnpm typegen` after changing it.
 - Secrets MUST NOT be committed. New ones MUST be added to `.env.example` / `.dev.vars.example` as empty placeholders.
+- Env flag comparisons SHOULD widen literal `wrangler types` output with `String(...)` at the composition boundary.
+- External adapters SHOULD provide an env-gated in-memory stub for local dev and E2E when the real service is not essential to the flow.
 
 **Aligning an existing repo:**
 
@@ -145,7 +149,7 @@ Local Postgres comes from the root `docker-compose.yml` (`postgres:18`, reachabl
 
 Drizzle ORM is the database adapter (the `database/postgres` slot in the hexagon). The schema is defined as TypeScript in `src/infra/drizzle/schema/`, and the row types are _inferred from the schema_ (`InferSelectModel` / `InferInsertModel` in `src/infra/drizzle/types.ts`) — the schema is the single source of truth, so types can never drift from the table definition. The connection is built by a `createDatabase(connectionString)` factory (`src/infra/drizzle/client.ts`), so the driver is injected rather than imported as a global singleton.
 
-Migrations are generated from the schema and applied with the `db:*` scripts (`db:generate`, `db:push`, `db:migrate`, `db:studio`); `drizzle.config.ts` points at the schema and reads `DATABASE_URL`. In production, Cloudflare Hyperdrive pools the Postgres connection at the edge. Integration tests run the real adapter against a Postgres testcontainer (see [Testing strategy](#testing-strategy)) — the database is never mocked.
+Migrations are generated from the schema and applied with the `db:*` scripts (`db:generate`, `db:push`, `db:migrate`, `db:studio`); `drizzle.config.ts` points at the schema and reads `DATABASE_URL`. In production, Cloudflare Hyperdrive pools the Postgres connection at the edge. Integration tests run the real adapter against a Postgres testcontainer (see [Testing strategy](#testing-strategy)) — the database is never mocked. The test database schema is created by running the committed `drizzle/*.sql` migrations through Drizzle's migrator, and test cleanup truncates the public tables discovered from Postgres metadata, so schema changes need a generated migration rather than a parallel hand-written test DDL edit.
 
 **Rules (MUST / SHOULD):**
 
@@ -153,6 +157,7 @@ Migrations are generated from the schema and applied with the `db:*` scripts (`d
 - Database access MUST go through the `createDatabase` factory so the connection is injected; no top-level client singletons in domain/api code.
 - Schema changes MUST be captured as migrations via `pnpm db:generate`; applied migrations MUST NOT be hand-edited.
 - Each repository/adapter SHOULD ship ≥1 `*.integration.test.ts` against a real testcontainer.
+- Integration test schema setup MUST use the committed Drizzle migrations as the source of truth.
 
 **Aligning an existing repo:**
 
@@ -196,6 +201,8 @@ Examples from the repo: `src/domain/shared/result.unit.test.ts`, `src/infra/driz
 
 Unit tests are the load-bearing layer: they run on every staged-file commit and every push, and they drive the 100% domain-coverage expectation. Integration tests verify that adapter code actually talks to the thing it claims to. E2E tests keep the most important journeys honest. Browser tests catch regressions in DOM-dependent behaviour that jsdom-style runners miss.
 
+When testing HTTP code, import and drive the real Hono app from `src/api/` or `src/server.ts`; the unit and integration test TypeScript configs include the generated `worker-configuration.d.ts` so `Cloudflare.Env` remains available where server code is tested. Browser tests stay on webapp-facing aliases and should not import infra modules. Layer typechecks are source-only: tests are excluded from `tsconfig.domain.json`, `tsconfig.infra.json`, `tsconfig.api.json`, and `tsconfig.webapp.json` and checked by the per-variant test configs instead.
+
 Each test type maps to a Vitest project or Playwright (`vitest.config.ts` defines the `unit`, `browser`, and `integration` projects; the `integration` project boots a Postgres testcontainer via `test/integration/global-setup.ts` and an MSW server via `test/integration/setup.ts`). The principle is **mock only what you don't own**: third-party HTTP is faked with MSW, while your own database is exercised for real against a container.
 
 **Test helpers and per-variant configs.** Test helpers are imported through `@test-utils/*` — a _variant-local_ alias that resolves to a different directory per test type: `test/unit/*`, `test/integration/*`, `test/browser/*`, or `e2e/test-utils/*`. Each level gets its own helper namespace, so a unit test can't reach for integration-only helpers (e.g. testcontainers) and the deep `../../../test/...` relative imports disappear. The alias is wired twice: a per-project `resolve.alias` in `vitest.config.ts` for the runtime, and a narrowed `paths` entry in each test config for the type-checker. Each variant also carries its own TypeScript config — `tsconfig.test.unit.json`, `tsconfig.test.integration.json`, `tsconfig.test.browser.json`, `tsconfig.test.e2e.json`, all extending the shared `tsconfig.base.json` — that models its runtime's APIs (node + `vitest/globals` for unit/integration, DOM + `@vitest/browser` for browser, node + Playwright for e2e), so the type-checker flags use of an API the runtime doesn't have. `tsconfig.test.json` aggregates the four through project references, and `pnpm typecheck:test` fans out to `typecheck:test:{unit,integration,browser,e2e}`. (Playwright needs `e2e/tsconfig.json` as a shim, because it resolves path aliases from the nearest `tsconfig.json` under the test dir.)
@@ -228,7 +235,7 @@ pnpm test:mutate
 
 Configuration lives in `stryker.config.mjs`. Stryker uses `vitest.mutation.config.ts`, not the main `vitest.config.ts`, so mutation testing runs only fast Node-based unit tests. This is deliberate: Stryker's Vitest runner does not support Vitest Browser Mode, and integration/e2e suites are too slow and environment-heavy for the mutation loop.
 
-Current mutation scope is `src/domain/**` and `src/api/**`, excluding tests, declarations, and declaration-only `*.types.ts` / `*.schema.ts` modules. Expand the `mutate` globs only when the new code has fast behavioural unit tests; do not add browser, integration, generated, or adapter-only code to the default mutation target set.
+Current mutation scope is `src/domain/**` and `src/api/**`, excluding all test suffixes, declarations, and declaration-only `*.types.ts` modules. Schema modules stay in scope when they live under mutated layers because schemas often encode runtime validation or API contracts. Expand the `mutate` globs only when the new code has fast behavioural unit tests; do not add browser, integration, generated, or adapter-only code to the default mutation target set. Composition or adapter code that is intentionally covered only by integration tests should be excluded from mutation rather than pulled into the unit-only mutation runner.
 
 The mutation score must stay at or above **80%**. `thresholds.break` enforces this in Stryker, so `pnpm test:mutate` and the mutation CI workflow fail below that floor. HTML reports are written under `reports/` for local investigation.
 
@@ -261,6 +268,18 @@ Each tool has a write variant and a check variant — `lint` / `lint:check`, `fo
 1. Add `oxlint` + `oxfmt`, create `oxlint.config.ts` / `oxfmt.config.ts`, and ignore generated files.
 2. Add the four script pairs (`lint`/`lint:check`, `format`/`format:check`).
 3. Port custom rules into `tools/oxlint-plugins/` and enable them under your own namespace.
+
+## UI scaffolding
+
+Chakra v3 provides low-level primitives; the starter vendors the common CLI snippets in `src/webapp/components/ui/` so a first real screen can use `Button`, `Field`, and the app-mounted `Toaster` without recreating the snippet path. Add more snippets with `pnpm dlx @chakra-ui/cli snippet add <name>` and move generated files under `src/webapp/components/ui/` if the CLI writes to its default `src/components/ui` path.
+
+Route protection should keep authorization enforceable on the server. The default pattern is a pathless TanStack `_authed` layout using `useSession` for client-side navigation UX, backed by explicit session checks on every protected API route. If you use an SSR `beforeLoad` guard instead, forward the incoming request `cookie` header to better-auth `getSession`; otherwise server-rendered route loads can see an anonymous request even when the browser has a valid session cookie.
+
+**Rules (MUST / SHOULD):**
+
+- Shared Chakra snippets SHOULD live under `src/webapp/components/ui/` and be mounted through the existing `Provider` when they are app-level services like toasts.
+- Protected data and mutations MUST be enforced in API routes; client route guards are UX, not authorization.
+- SSR auth guards MUST forward request cookies when calling better-auth session APIs.
 
 ## Module filename conventions
 
@@ -397,7 +416,11 @@ pnpm codebase:boundary-violations # architecture boundary violations only
 pnpm codebase:fix:dry-run         # preview auto-fixes for unused exports/deps
 ```
 
-`pnpm run ci` runs `pnpm codebase:audit` (`fallow audit`) as a quality gate — it scopes analysis to files changed against the base branch and returns a pass/warn/fail verdict. Configuration lives in `.fallowrc.json`, including custom boundary zones and rules for the hexagonal architecture. For the full feature set, see the [fallow docs](https://docs.fallow.tools).
+`pnpm run ci` runs `pnpm codebase:audit` (`fallow audit`) as a quality gate — it scopes analysis to files changed against the base branch and returns a pass/warn/fail verdict. Configuration lives in `.fallowrc.json`, including custom boundary zones and rules for the hexagonal architecture. Generated files that should not be analyzed directly are ignored, while generated reachability roots such as `src/webapp/routeTree.gen.ts`, the deliberate public inferred-row-type surface `src/infra/drizzle/types.ts`, and intentionally vendored UI snippets are listed as entries so routes, shared row types, and template scaffolding do not look unused.
+
+The fast audit does not consume coverage output. Because this template intentionally unit-tests `domain`/`api` and browser/integration-tests `webapp`/`infra`, `.fallowrc.json` raises `health.maxCrap` so zero-coverage CRAP false positives on UI/infra code do not become stricter than the cyclomatic and cognitive complexity gates. Duplication scans use a higher `duplicates.minLines` threshold because short Testcontainers/MSW setup blocks are acceptable boilerplate, and `duplicate-exports` is a warning because TanStack route files must each export `Route`.
+
+For the full feature set, see the [fallow docs](https://docs.fallow.tools).
 
 ## Reproducing this setup in your own repo
 

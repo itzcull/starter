@@ -6,7 +6,10 @@ export default {
     configFile: 'vitest.mutation.config.ts',
   },
   tsconfigFile: 'tsconfig.json',
-  mutate: ['src/domain/**/*.ts', 'src/api/**/*.ts', '!src/**/*.unit.test.ts'],
+  mutate: [
+    'src/domain/**/!(*.unit.test|*.integration.test|*.browser.test|*.types|*.d).ts',
+    'src/api/**/!(*.unit.test|*.integration.test|*.browser.test|*.types|*.d).ts',
+  ],
   reporters: ['html', 'clear-text', 'progress'],
   coverageAnalysis: 'perTest',
   thresholds: {

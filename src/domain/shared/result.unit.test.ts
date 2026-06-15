@@ -1,19 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import { ok, err, type Result } from './result'
 
+type TestNumberOptions = {
+  readonly value?: number
+}
+
+const createTestNumber = ({ value = 42 }: TestNumberOptions = {}): number => value
+
 describe('Result', () => {
   describe('ok', () => {
     it('creates a success result with the given value', () => {
-      const result = ok(42)
+      const value = createTestNumber()
+      const result = ok(value)
 
-      expect(result).toEqual({ ok: true, value: 42 })
+      expect(result).toEqual({ ok: true, value })
     })
 
     it('narrows to success branch when ok is true', () => {
-      const result: Result<number, Error> = ok(42)
+      const value = createTestNumber()
+      const result: Result<number, Error> = ok(value)
 
       if (result.ok) {
-        expect(result.value).toBe(42)
+        expect(result.value).toBe(value)
       } else {
         throw new Error('Expected ok result')
       }

@@ -82,7 +82,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Run browser tests
-        run: pnpm test:browser --run --passWithNoTests
+        run: pnpm test:browser --run
 
   test-integration:
     runs-on: ubuntu-latest

@@ -1,6 +1,8 @@
+import { URL, fileURLToPath } from 'node:url'
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
+import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
 import * as schema from '../../src/infra/drizzle/schema'
 
@@ -13,7 +15,14 @@ type TestDatabaseContext = {
   readonly sqlClient: ReturnType<typeof postgres>
 }
 
+type DatabaseTable = {
+  readonly tableSchema: string
+  readonly tableName: string
+}
+
 let containerInstance: StartedPostgreSqlContainer | null = null
+
+const migrationsDirectory = fileURLToPath(new URL('../../drizzle', import.meta.url))
 
 const startContainer = async (): Promise<StartedPostgreSqlContainer> => {
   if (containerInstance) {
@@ -57,63 +66,36 @@ const createTestDatabase = async (): Promise<TestDatabaseContext> => {
 }
 
 const pushSchema = async (db: TestDatabase): Promise<void> => {
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS "user" (
-      "id" TEXT PRIMARY KEY,
-      "name" TEXT NOT NULL,
-      "email" TEXT NOT NULL UNIQUE,
-      "email_verified" BOOLEAN NOT NULL DEFAULT false,
-      "image" TEXT,
-      "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
-      "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
-    )
-  `)
+  await migrate(db, { migrationsFolder: migrationsDirectory })
+}
 
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS "session" (
-      "id" TEXT PRIMARY KEY,
-      "expires_at" TIMESTAMP NOT NULL,
-      "token" TEXT NOT NULL UNIQUE,
-      "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
-      "updated_at" TIMESTAMP NOT NULL DEFAULT NOW(),
-      "ip_address" TEXT,
-      "user_agent" TEXT,
-      "user_id" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE
-    )
-  `)
+const quoteIdentifier = (identifier: string): string => `"${identifier.replaceAll('"', '""')}"`
 
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS "account" (
-      "id" TEXT PRIMARY KEY,
-      "account_id" TEXT NOT NULL,
-      "provider_id" TEXT NOT NULL,
-      "user_id" TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
-      "access_token" TEXT,
-      "refresh_token" TEXT,
-      "id_token" TEXT,
-      "access_token_expires_at" TIMESTAMP,
-      "refresh_token_expires_at" TIMESTAMP,
-      "scope" TEXT,
-      "password" TEXT,
-      "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
-      "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
-    )
-  `)
-
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS "verification" (
-      "id" TEXT PRIMARY KEY,
-      "identifier" TEXT NOT NULL,
-      "value" TEXT NOT NULL,
-      "expires_at" TIMESTAMP NOT NULL,
-      "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
-      "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
-    )
+const getPublicTables = async (db: TestDatabase): Promise<readonly DatabaseTable[]> => {
+  return db.execute<DatabaseTable>(sql`
+    SELECT table_schema AS "tableSchema", table_name AS "tableName"
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_type = 'BASE TABLE'
+    ORDER BY table_schema, table_name
   `)
 }
 
 const truncateAllTables = async (db: TestDatabase): Promise<void> => {
-  await db.execute(sql`TRUNCATE TABLE "session", "account", "verification", "user" CASCADE`)
+  const tables = await getPublicTables(db)
+
+  if (tables.length === 0) {
+    return
+  }
+
+  const tableReferences = tables
+    .map(
+      ({ tableSchema, tableName }) =>
+        `${quoteIdentifier(tableSchema)}.${quoteIdentifier(tableName)}`,
+    )
+    .join(', ')
+
+  await db.execute(sql.raw(`TRUNCATE TABLE ${tableReferences} RESTART IDENTITY CASCADE`))
 }
 
 const closeConnection = async (sqlClient: ReturnType<typeof postgres>): Promise<void> => {

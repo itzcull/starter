@@ -3,6 +3,9 @@
   "entry": [
     "src/server.ts",
     "src/webapp/router.tsx",
+    "src/webapp/routeTree.gen.ts",
+    "src/webapp/components/ui/*.tsx",
+    "src/infra/drizzle/types.ts",
     "src/**/*.{test,spec}.{ts,tsx}",
     "test/**/*.{ts,tsx}",
     "e2e/**/*.{ts,tsx}",
@@ -11,6 +14,7 @@
     "stryker.config.mjs",
     "vitest.mutation.config.ts"
   ],
+  "ignorePatterns": ["worker-configuration.d.ts", "dist/**"],
   "ignoreDependencies": [
     "@chakra-ui/charts",
     "@edge-runtime/vm",
@@ -25,7 +29,14 @@
   ],
   "rules": {
     "boundary-violation": "error",
+    "duplicate-exports": "warn",
     "unused-dependencies": "warn"
+  },
+  "duplicates": {
+    "minLines": 25
+  },
+  "health": {
+    "maxCrap": 100
   },
   "boundaries": {
     "zones": [
