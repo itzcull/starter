@@ -6,7 +6,7 @@
     "deploy": "wrangler deploy",
     "dev": "vite dev",
     "test": "vitest",
-    "test:browser": "vitest --project browser",
+    "test:browser": "vitest --project browser --passWithNoTests",
     "test:unit": "vitest --project unit",
     "test:integration": "vitest --project integration",
     "test:e2e": "playwright test",

@@ -9,6 +9,7 @@
     }
   },
   "include": [
+    "worker-configuration.d.ts",
     "src/**/*.integration.test.ts",
     "src/**/*.integration.test.tsx",
     "test/**/*.integration.test.ts",
