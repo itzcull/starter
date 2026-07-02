@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import type { createAuth as createAuthAdapter } from '@infra/better-auth/auth-adapter'
 
 const mockAuthHandler = vi.fn<(request: Request) => Promise<Response>>()

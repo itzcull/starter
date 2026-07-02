@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { server } from '@test-utils/msw-server'
 
 describe('MSW integration test support', () => {

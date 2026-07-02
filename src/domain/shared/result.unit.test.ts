@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { ok, err, type Result } from './result'
 
 type TestNumberOptions = {
