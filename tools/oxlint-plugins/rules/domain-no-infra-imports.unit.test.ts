@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { describe, it } from 'vitest'
+import { describe, it } from 'vite-plus/test'
 import rawRule from './domain-no-infra-imports.js'
 import { runRuleTester, type Rule } from '../test-utils/rule-tester'
 

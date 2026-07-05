@@ -1,4 +1,4 @@
-import { expect } from 'vitest'
+import { expect } from 'vite-plus/test'
 import * as acorn from 'acorn'
 
 type Visitor = (node: any) => void

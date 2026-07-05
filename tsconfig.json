@@ -2,7 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["esnext", "DOM"],
-    "types": ["vite/client"],
+    "types": ["vite-plus/client"],
     "paths": {
       "@domain/*": ["./src/domain/*"],
       "@infra/*": ["./src/infra/*"],

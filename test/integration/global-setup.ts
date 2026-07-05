@@ -1,4 +1,4 @@
-import type { TestProject } from 'vitest/node'
+import type { TestProject } from 'vite-plus/test/node'
 import { closeConnection, createTestDatabase, pushSchema, stopContainer } from './test-database'
 
 declare module 'vitest' {
