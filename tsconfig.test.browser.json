@@ -2,7 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["esnext", "DOM"],
-    "types": ["vite/client", "vitest/globals", "@vitest/browser"],
+    "types": ["vite-plus/client", "vite-plus/test/browser", "vitest/globals"],
     "paths": {
       "@domain/*": ["./src/domain/*"],
       "@theme": ["./src/webapp/theme"],
