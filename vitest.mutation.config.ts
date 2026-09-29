@@ -7,6 +7,7 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
+    // Vitest v4 compatibility: preserve mock call history.
     name: 'mutation',
     include: ['**/*.unit.test.{ts,tsx}'],
     exclude: defaultExclude,

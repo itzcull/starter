@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite-plus'
 
 export default defineConfig({
+  test: {
+    // Vitest v4 compatibility: preserve mock call history.
+  },
   fmt: {
     semi: false,
     singleQuote: true,

@@ -1,6 +1,6 @@
 # Development Toolchain
 
-This project uses **Vite+** (`vite-plus`) as its unified toolchain, which bundles **Vite 8**, **Vitest 4**, **Oxlint**, and **Oxfmt** behind the `vp` command. **Stryker** (mutation testing), **Fallow** (codebase intelligence), and **pnpm** complete the toolchain. Vite+ is installed as a devDependency; `vite` and `vitest` are provided through the `pnpm-workspace.yaml` catalog so plugins and runners that peer on them resolve to Vite+'s versions.
+This project uses **Vite+ 1.0** (`vite-plus`) as its unified toolchain, which bundles **Vite 8**, **Vitest 5**, **Oxlint**, and **Oxfmt** behind the `vp` command. **Stryker** (mutation testing), **Fallow** (codebase intelligence), and **pnpm** complete the toolchain. Vite+ is installed as a devDependency; `vite` and `vitest` are provided through the `pnpm-workspace.yaml` catalog so plugins and runners that peer on them resolve to Vite+'s versions.
 
 ## Commands
 
@@ -8,7 +8,8 @@ This project uses **Vite+** (`vite-plus`) as its unified toolchain, which bundle
 
 - `pnpm dev` - Start the dev server (`vp dev`)
 - `pnpm build` - Production build (`vp build`)
-- `pnpm preview` - Preview the production build (`vp preview`)
+- `pnpm start` - Preview the production build (`vp preview`)
+- `pnpm preview` - Alias for `pnpm start`
 
 ### Testing
 
@@ -20,8 +21,6 @@ This project uses **Vite+** (`vite-plus`) as its unified toolchain, which bundle
 - `pnpm test:coverage` - Run all Vitest projects with coverage
 - `pnpm test:mutate` - Run Stryker mutation tests against unit-tested source
 - `pnpm vitest run --project <name>` - Run a specific test project in CI mode (no watch)
-
-> **Note:** Test scripts invoke `vitest` directly rather than `vp test`. Vite+ 0.2.x has a packaging skew between its test proxy (`@voidzero-dev/vite-plus-test`, bundling `@vitest/*@4.1.8`) and its runtime (`@vitest/*@4.1.9`) that breaks `vp test` with `Cannot read properties of undefined (reading 'config')`. `vitest@4.1.9` (pinned via the catalog) runs the suite correctly. Revisit `vp test` once Vite+ aligns these versions.
 
 ### Integration Test Boundaries
 
@@ -57,7 +56,7 @@ This project uses **Vite+** (`vite-plus`) as its unified toolchain, which bundle
 - **Vitest config**: `vitest.config.ts` (test projects: unit, browser, integration)
 - **Mutation Vitest config**: `vitest.mutation.config.ts` (unit tests only for Stryker)
 - **Stryker config**: `stryker.config.mjs` (mutation scope, reporters, 80% break threshold)
-- **pnpm workspace catalog**: `pnpm-workspace.yaml` pins `vite-plus`, `vite`, and `vitest` so all consumers resolve to Vite+'s versions
+- **pnpm workspace catalog**: `pnpm-workspace.yaml` pins Vite+ 1.0, its Vite core alias, and Vitest 5 so all consumers resolve to Vite+'s versions
 - **Fallow config**: `.fallowrc.json` (dead code analysis, dependency checks, custom architecture boundary zones)
 - **TypeScript**: `tsconfig.json`, `tsconfig.app.json`, and layer-specific configs
 - **Test TypeScript**: `tsconfig.test.unit.json`, `tsconfig.test.integration.json`, `tsconfig.test.browser.json`, and `tsconfig.test.e2e.json` each model the runtime APIs for their test type. `@test-utils/*` is variant-local: unit tests resolve it to `test/unit/*`, integration tests to `test/integration/*`, browser tests to `test/browser/*`, and E2E tests to `e2e/test-utils/*`.
@@ -74,8 +73,8 @@ This project uses **Vite+** (`vite-plus`) as its unified toolchain, which bundle
 
 Git hooks are managed by [lefthook](https://lefthook.dev), configured in `lefthook.yml`.
 
-- **pre-commit** runs `vp lint --fix` and `vp fmt --write` on staged files (auto-restaged), then runs `vitest related` over the staged files — only unit tests that import a staged file execute. It also runs `pnpm codebase:audit` to enforce codebase intelligence checks before each commit.
-- **pre-push** runs `vitest run --changed origin/master --project unit`, executing only the unit tests affected by files changed against `origin/master`.
+- **pre-commit** runs `vp lint --fix` and `vp fmt --write` on staged files (auto-restaged), then runs `vp test related` over the staged files — only unit tests that import a staged file execute. It also runs `pnpm codebase:audit` to enforce codebase intelligence checks before each commit.
+- **pre-push** runs `vp test run --changed origin/master --project unit`, executing only the unit tests affected by files changed against `origin/master`.
 
 Mutation testing is intentionally not a git hook because it is slower than the commit/push feedback loop. Run `pnpm test:mutate` before merging changes to `src/domain/**`, `src/api/**`, or unit-test behaviour; CI enforces the same command for those paths.
 
