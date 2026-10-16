@@ -189,3 +189,4 @@ dist
 stryker-tmp/
 reports/
 .fallow/
+.vitest/

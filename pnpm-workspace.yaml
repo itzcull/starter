@@ -1,10 +1,16 @@
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@0.2.2
-  vitest: 4.1.9
-  vite-plus: 0.2.2
+  '@vitest/browser-playwright': 5.0.5
+  '@vitest/coverage-v8': 5.0.5
+  vite: npm:@voidzero-dev/vite-plus-core@1.3.0
+  vite-plus: 1.3.0
+  vitest: 5.0.5
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
+patchedDependencies:
+  # Match Vitest 5's nested test names in coverage IDs and mutant filters.
+  # Remove when https://github.com/stryker-mutator/stryker-js/pull/6214 ships.
+  '@stryker-mutator/vitest-runner@9.6.1': patches/@stryker-mutator__vitest-runner@9.6.1.patch
 peerDependencyRules:
   allowAny:
     - vite

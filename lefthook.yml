@@ -9,11 +9,11 @@ pre-commit:
       run: vp fmt --write {staged_files} && git add {staged_files}
     - name: test
       glob: '*.{js,ts,tsx,jsx,mjs,cjs}'
-      run: pnpm exec vitest related --run --project unit --passWithNoTests {staged_files}
+      run: pnpm exec vp test related --run --project unit --passWithNoTests {staged_files}
     - name: codebase-audit
       run: pnpm codebase:audit
 
 pre-push:
   jobs:
     - name: test-changed
-      run: pnpm exec vitest run --changed origin/master --project unit
+      run: pnpm exec vp test run --changed origin/master --project unit
