@@ -1,6 +1,6 @@
 # Development Toolchain
 
-This project uses **Vite+ 1.0** (`vite-plus`) as its unified toolchain, which bundles **Vite 8**, **Vitest 5**, **Oxlint**, and **Oxfmt** behind the `vp` command. **Stryker** (mutation testing), **Fallow** (codebase intelligence), and **pnpm** complete the toolchain. Vite+ is installed as a devDependency; `vite` and `vitest` are provided through the `pnpm-workspace.yaml` catalog so plugins and runners that peer on them resolve to Vite+'s versions.
+This project uses **Vite+** (`vite-plus`) as its unified toolchain, which bundles **Vite 8**, **Vitest 5**, **Oxlint**, and **Oxfmt** behind the `vp` command. **Stryker** (mutation testing), **Fallow** (codebase intelligence), and **pnpm** complete the toolchain. Vite+ is installed as a devDependency; `vite` and `vitest` are provided through the `pnpm-workspace.yaml` catalog so plugins and runners that peer on them resolve to Vite+'s versions.
 
 ## Commands
 
@@ -56,7 +56,7 @@ This project uses **Vite+ 1.0** (`vite-plus`) as its unified toolchain, which bu
 - **Vitest config**: `vitest.config.ts` (test projects: unit, browser, integration)
 - **Mutation Vitest config**: `vitest.mutation.config.ts` (unit tests only for Stryker)
 - **Stryker config**: `stryker.config.mjs` (mutation scope, reporters, 80% break threshold)
-- **pnpm workspace catalog**: `pnpm-workspace.yaml` pins Vite+ 1.0, its Vite core alias, and Vitest 5 so all consumers resolve to Vite+'s versions
+- **pnpm workspace catalog**: `pnpm-workspace.yaml` pins Vite+, its Vite core alias, and the matching Vitest version so all consumers resolve to Vite+'s versions
 - **Fallow config**: `.fallowrc.json` (dead code analysis, dependency checks, custom architecture boundary zones)
 - **TypeScript**: `tsconfig.json`, `tsconfig.app.json`, and layer-specific configs
 - **Test TypeScript**: `tsconfig.test.unit.json`, `tsconfig.test.integration.json`, `tsconfig.test.browser.json`, and `tsconfig.test.e2e.json` each model the runtime APIs for their test type. `@test-utils/*` is variant-local: unit tests resolve it to `test/unit/*`, integration tests to `test/integration/*`, browser tests to `test/browser/*`, and E2E tests to `e2e/test-utils/*`.

@@ -12,6 +12,8 @@ on:
       - 'vitest.mutation.config.ts'
       - 'package.json'
       - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'patches/**'
   workflow_dispatch: {}
 
 concurrency:
